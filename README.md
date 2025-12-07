@@ -19,33 +19,34 @@ Build a security sidecar that:
 
 ## 🏗️ Architecture
 
-```
-┌─────────────┐
-│   Client    │
-└──────┬──────┘
-       │ POST /chat/completions
-       ▼
-┌─────────────────────────────────────┐
-│   Rust Proxy (Port 8080)            │
-│   - Request interception            │
-│   - Session management              │
-│   - Groq API forwarding             │
-└──────┬──────────────────────────────┘
-       │ POST /analyze
-       ▼
-┌─────────────────────────────────────┐
-│   Python Brain (Port 5000)          │
-│   - Neural Memory (PyTorch)         │
-│   - Surprise calculation            │
-│   - Test-time training              │
-└─────────────────────────────────────┘
-       │ is_anomaly: false
-       ▼
-┌─────────────────────────────────────┐
-│   Groq API                          │
-│   - Fast LLM completions            │
-│   - llama3-8b-8192, mixtral, etc.   │
-└─────────────────────────────────────┘
+Project Mnemosyne implements a **Sidecar Proxy Pattern** for LLM security.
+
+> **Note on Implementation vs Vision**: This implementation represents the **MVP (Phase 1)** of the Mnemosyne vision.
+> *   **Current**: Application-Layer HTTP Proxy (Rust/Axum) + simplified MLP Memory (Python/FastAPI).
+> *   **Future Roadmap**: Kernel-level eBPF interception, gRPC communication, and full Titans MAC (LSTM+MLP) architecture.
+
+### Current Implementation Flow
+
+```mermaid
+graph TD
+    User[Client Application] -->|HTTP POST /chat/completions| Proxy[Rust Proxy :8080]
+    Proxy -->|Extract Prompt| ProxyLogic{Analysis Needed?}
+    
+    subgraph "Mnemosyne Sidecar"
+    ProxyLogic -->|HTTP POST /analyze| Brain[Python Brain :5000]
+    Brain -->|Forward Pass| NeuralMem[(Titans Neural Memory)]
+    NeuralMem -->|Surprise Score| Brain
+    Brain -->|Is Anomaly?| ProxyLogic
+    end
+    
+    ProxyLogic -->|Anomaly (>5.0)| Block[403 Forbidden]
+    ProxyLogic -->|Safe| Groq[Groq API]
+    Groq -->|Response Stream| Proxy
+    Proxy -->|Response Stream| User
+    
+    Brain -.->|Async Backward Pass| NeuralMem
+    style Block fill:#f99
+    style NeuralMem fill:#9f9
 ```
 
 ### Components
