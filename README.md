@@ -21,9 +21,9 @@ Build a security sidecar that:
 
 Project Mnemosyne implements a **Sidecar Proxy Pattern** for LLM security.
 
-> **Note on Implementation vs Vision**: This implementation represents the **MVP (Phase 1)** of the Mnemosyne vision.
-> *   **Current**: Application-Layer HTTP Proxy (Rust/Axum) + simplified MLP Memory (Python/FastAPI).
-> *   **Future Roadmap**: Kernel-level eBPF interception, gRPC communication, and full Titans MAC (LSTM+MLP) architecture.
+> **Note on Implementation vs Vision**: This implementation now features the **Titans MAC Architecture**!
+> *   **Current**: Application-Layer HTTP Proxy (Rust/Axum) + **Titans MAC Brain** (LSTM Controller + MLP Memory).
+> *   **Future Roadmap**: Kernel-level eBPF interception and gRPC communication for zero-latency.
 
 ### Current Implementation Flow
 
@@ -34,7 +34,8 @@ graph TD
     
     subgraph "Mnemosyne Sidecar"
     ProxyLogic -->|HTTP POST /analyze| Brain[Python Brain :5000]
-    Brain -->|Forward Pass| NeuralMem[(Titans Neural Memory)]
+    Brain -->|Input| LSTM[LSTM Controller (Context)]
+    LSTM -->|Context+Input| NeuralMem[(MLP Memory)]
     NeuralMem -->|Surprise Score| Brain
     Brain -->|Is Anomaly?| ProxyLogic
     end
@@ -47,6 +48,7 @@ graph TD
     Brain -.->|Async Backward Pass| NeuralMem
     style Block fill:#f99
     style NeuralMem fill:#9f9
+    style LSTM fill:#f96
 ```
 
 ### Components

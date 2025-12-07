@@ -12,8 +12,8 @@ import hashlib
 
 class NeuralMemory(nn.Module):
     """
-    MLP-based long-term memory vector.
-    Architecture: Linear -> ReLU -> Linear
+    Titans MAC Architecture:
+    Short-Term Context (LSTM) + Long-Term Memory (MLP)
     """
     
     def __init__(self, embed_dim: int = 16, hidden_dim: int = 32, vocab_size: int = 100):
@@ -21,39 +21,44 @@ class NeuralMemory(nn.Module):
         self.embed_dim = embed_dim
         self.vocab_size = vocab_size
         
-        # Embedding layer for input tokens
+        # Embedding layer
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         
-        # MLP layers
-        self.fc1 = nn.Linear(embed_dim, hidden_dim)
+        # Short-Term Context (Controller)
+        self.lstm = nn.LSTM(
+            input_size=embed_dim,
+            hidden_size=hidden_dim,
+            batch_first=True
+        )
+        
+        # Long-Term Memory (MLP)
+        # Input is combined LSTM output (hidden_dim) + Embedding (embed_dim)
+        self.fc1 = nn.Linear(hidden_dim, hidden_dim)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(hidden_dim, vocab_size)
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, hidden: Tuple[torch.Tensor, torch.Tensor] = None) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
-        Forward pass through the neural memory.
-        
-        Args:
-            x: Input tensor of token indices [batch_size, seq_len]
-            
-        Returns:
-            Logits for next token prediction [batch_size, seq_len, vocab_size]
+        Forward pass with memory interaction.
         """
-        # Embed input tokens
-        embedded = self.embedding(x)  # [batch_size, seq_len, embed_dim]
+        # Embed input
+        embedded = self.embedding(x)  # [batch, seq, embed]
         
-        # Pass through MLP
-        hidden = self.fc1(embedded)
-        hidden = self.relu(hidden)
-        logits = self.fc2(hidden)  # [batch_size, seq_len, vocab_size]
+        # Pass through LSTM Controller
+        lstm_out, new_hidden = self.lstm(embedded, hidden)  # lstm_out: [batch, seq, hidden_dim]
         
-        return logits
+        # Pass through Deep Memory (MLP)
+        # Using LSTM output as the context-enriched input to memory
+        mem_out = self.fc1(lstm_out)
+        mem_out = self.relu(mem_out)
+        logits = self.fc2(mem_out)  # [batch, seq, vocab]
+        
+        return logits, new_hidden
 
 
 class SecurityAgent:
     """
-    Titans-based security agent that maintains session-specific neural memory
-    and performs test-time training to adapt to new inputs.
+    Titans-based security agent with MAC architecture.
     """
     
     def __init__(self, embed_dim: int = 16, hidden_dim: int = 32, vocab_size: int = 100, learning_rate: float = 0.001):
@@ -61,97 +66,63 @@ class SecurityAgent:
         self.vocab_size = vocab_size
         self.learning_rate = learning_rate
         
-        # Initialize neural memory
         self.model = NeuralMemory(embed_dim, hidden_dim, vocab_size)
-        
-        # Optimizer for test-time training
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-        
-        # Loss function for surprise calculation
         self.criterion = nn.CrossEntropyLoss()
         
-    def _tokenize(self, text: str) -> torch.Tensor:
-        """
-        Simple character-level tokenization with modulo mapping to vocab.
+        # Persistent Short-Term Context (LSTM state)
+        self.hidden_state = None
         
-        Args:
-            text: Input text string
-            
-        Returns:
-            Tensor of token indices
-        """
-        # Convert characters to integers and map to vocab size
+    def _tokenize(self, text: str) -> torch.Tensor:
         tokens = [ord(c) % self.vocab_size for c in text]
-        return torch.tensor(tokens, dtype=torch.long).unsqueeze(0)  # [1, seq_len]
+        return torch.tensor(tokens, dtype=torch.long).unsqueeze(0)
     
     def calculate_surprise(self, text: str) -> float:
-        """
-        Calculate surprise score (gradient loss) for the input text.
-        Higher surprise indicates anomalous input.
-        
-        Args:
-            text: Input text to analyze
-            
-        Returns:
-            Surprise score (float)
-        """
         if not text or len(text) < 2:
             return 0.0
         
-        # Tokenize input
         tokens = self._tokenize(text)
+        input_tokens = tokens[:, :-1]
+        target_tokens = tokens[:, 1:]
         
-        # Prepare input and target for next-token prediction
-        input_tokens = tokens[:, :-1]  # All but last token
-        target_tokens = tokens[:, 1:]   # All but first token
-        
-        # Forward pass
         self.model.eval()
         with torch.no_grad():
-            logits = self.model(input_tokens)  # [1, seq_len-1, vocab_size]
-        
-            # Reshape for loss calculation
+            # Pass persistent hidden state
+            logits, new_hidden = self.model(input_tokens, self.hidden_state)
+            
             logits_flat = logits.reshape(-1, self.vocab_size)
             target_flat = target_tokens.reshape(-1)
-            
-            # Calculate cross-entropy loss as surprise metric
             loss = self.criterion(logits_flat, target_flat)
             surprise_score = loss.item()
+            
+            # Update persistent state (detach to prevent graph retention)
+            self.hidden_state = (new_hidden[0].detach(), new_hidden[1].detach())
         
         return surprise_score
     
     def update_memory(self, text: str) -> None:
-        """
-        Perform test-time training to update neural memory based on new input.
-        This allows the model to adapt to expanding contexts.
-        
-        Args:
-            text: Input text to learn from
-        """
         if not text or len(text) < 2:
             return
         
-        # Tokenize input
         tokens = self._tokenize(text)
-        
-        # Prepare input and target
         input_tokens = tokens[:, :-1]
         target_tokens = tokens[:, 1:]
         
-        # Training mode
         self.model.train()
         
-        # Forward pass
-        logits = self.model(input_tokens)
+        # For learning, we temporarily use the valid hidden state 
+        # but don't persist the result to avoid double-counting context
+        # detaching is crucial
+        ctx = self.hidden_state
+        if ctx:
+             ctx = (ctx[0].detach(), ctx[1].detach())
+
+        logits, _ = self.model(input_tokens, ctx)
         
-        # Reshape for loss calculation
         logits_flat = logits.reshape(-1, self.vocab_size)
         target_flat = target_tokens.reshape(-1)
-        
-        # Calculate loss
         loss = self.criterion(logits_flat, target_flat)
         
-        # Backward pass and optimization
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -159,6 +130,7 @@ class SecurityAgent:
     def is_anomalous(self, surprise_score: float, threshold: float = 5.0) -> bool:
         """
         Determine if a surprise score indicates an anomaly.
+        
         
         Args:
             surprise_score: Calculated surprise score
