@@ -61,7 +61,7 @@ class SecurityAgent:
     Titans-based security agent with MAC architecture.
     """
     
-    def __init__(self, embed_dim: int = 16, hidden_dim: int = 32, vocab_size: int = 100, learning_rate: float = 0.001):
+    def __init__(self, embed_dim: int = 16, hidden_dim: int = 32, vocab_size: int = 100, learning_rate: float = 0.01):
         self.embed_dim = embed_dim
         self.vocab_size = vocab_size
         self.learning_rate = learning_rate
@@ -127,14 +127,14 @@ class SecurityAgent:
         loss.backward()
         self.optimizer.step()
     
-    def is_anomalous(self, surprise_score: float, threshold: float = 5.0) -> bool:
+    def is_anomalous(self, surprise_score: float, threshold: float = 4.5) -> bool:
         """
         Determine if a surprise score indicates an anomaly.
         
         
         Args:
             surprise_score: Calculated surprise score
-            threshold: Anomaly threshold (default: 5.0)
+            threshold: Anomaly threshold (default: 4.5)
             
         Returns:
             True if anomalous, False otherwise

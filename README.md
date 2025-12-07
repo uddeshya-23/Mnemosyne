@@ -243,7 +243,7 @@ Each session maintains its own neural memory, preventing cross-contamination and
 3. Rebuild: `docker-compose up --build`
 
 ### Issue: All requests are blocked
-**Solution**: The threshold might be too low. Edit `brain/titans.py` and increase the threshold in `is_anomalous()` from 3.5 to 5.0.
+**Solution**: The threshold might be too low. Edit `brain/titans.py` and increase the threshold in `is_anomalous()` from 4.5 to 5.0.
 
 ### Issue: No requests are blocked
 **Solution**: The model may need more training data. Send a few normal requests first to establish a baseline, then try attack patterns.

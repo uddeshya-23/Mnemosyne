@@ -240,25 +240,27 @@ class MnemosyneTester:
             "What is the capital of France?"
         ]
         
-        print(f"Sending {len(warmup_prompts)} training examples...")
+        print(f"Sending {len(warmup_prompts) * 3} training examples...")
         
-        for i, prompt in enumerate(warmup_prompts):
-            payload = {
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": prompt}]
-            }
-            try:
-                # We expect these might fail initially, so we don't assert 200
-                response = requests.post(
-                    f"{self.proxy_url}/chat/completions",
-                    json=payload,
-                    timeout=10
-                )
-                status = "PASSED" if response.status_code == 200 else f"BLOCKED ({response.status_code})"
-                print(f"  Warmup {i+1}: {status}")
-                time.sleep(0.5) # Give slight breather for async update
-            except Exception as e:
-                print(f"  Warmup {i+1}: Error - {str(e)}")
+        # Loop 3 times to reinforce patterns
+        for loop in range(3):
+            for i, prompt in enumerate(warmup_prompts):
+                payload = {
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+                try:
+                    # We expect these might fail initially, so we don't assert 200
+                    response = requests.post(
+                        f"{self.proxy_url}/chat/completions",
+                        json=payload,
+                        timeout=10
+                    )
+                    status = "PASSED" if response.status_code == 200 else f"BLOCKED ({response.status_code})"
+                    print(f"  Warmup {loop+1}-{i+1}: {status}")
+                    time.sleep(0.5) # Give slight breather for async update
+                except Exception as e:
+                    print(f"  Warmup {loop+1}-{i+1}: Error - {str(e)}")
 
         print("Warmup complete. Memory should now be initialized.\n")
 
