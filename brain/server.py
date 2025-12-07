@@ -1,0 +1,129 @@
+"""
+FastAPI server for the Titans-based security analysis engine.
+Exposes endpoints for analyzing text inputs and detecting anomalies.
+"""
+
+from fastapi import FastAPI, BackgroundTasks
+from pydantic import BaseModel
+from typing import Dict
+import logging
+from titans import SessionManager
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Mnemosyne Brain",
+    description="Titans-based security analysis engine for LLM traffic",
+    version="1.0.0"
+)
+
+# Global session manager
+session_manager = SessionManager()
+
+
+class AnalysisRequest(BaseModel):
+    """Request model for text analysis."""
+    session_id: str
+    text: str
+
+
+class AnalysisResponse(BaseModel):
+    """Response model for analysis results."""
+    surprise_score: float
+    is_anomaly: bool
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "active_sessions": session_manager.get_session_count()
+    }
+
+
+@app.post("/analyze", response_model=AnalysisResponse)
+async def analyze_text(request: AnalysisRequest, background_tasks: BackgroundTasks):
+    """
+    Analyze input text for anomalies using Titans architecture.
+    
+    Flow:
+    1. Retrieve or create SecurityAgent for the session
+    2. Calculate surprise score for the input text
+    3. Determine if the input is anomalous
+    4. Schedule background task to update neural memory
+    5. Return immediate response
+    
+    Args:
+        request: Analysis request containing session_id and text
+        background_tasks: FastAPI background tasks for async memory update
+        
+    Returns:
+        Analysis response with surprise score and anomaly flag
+    """
+    try:
+        # Get or create agent for this session
+        agent = session_manager.get_or_create_agent(request.session_id)
+        
+        # Calculate surprise score
+        surprise_score = agent.calculate_surprise(request.text)
+        
+        # Determine if anomalous
+        is_anomaly = agent.is_anomalous(surprise_score)
+        
+        # Log the analysis
+        logger.info(
+            f"Session: {request.session_id[:8]}... | "
+            f"Surprise: {surprise_score:.4f} | "
+            f"Anomaly: {is_anomaly} | "
+            f"Text length: {len(request.text)}"
+        )
+        
+        if is_anomaly:
+            logger.warning(
+                f"ANOMALY DETECTED - Session: {request.session_id[:8]}... | "
+                f"Score: {surprise_score:.4f} | "
+                f"Text preview: {request.text[:100]}..."
+            )
+        
+        # Schedule memory update in background (async learning)
+        background_tasks.add_task(agent.update_memory, request.text)
+        
+        # Return immediate response
+        return AnalysisResponse(
+            surprise_score=surprise_score,
+            is_anomaly=is_anomaly
+        )
+        
+    except Exception as e:
+        logger.error(f"Error analyzing text: {str(e)}", exc_info=True)
+        # In case of error, fail safe to blocking
+        return AnalysisResponse(
+            surprise_score=999.0,  # High score to trigger blocking
+            is_anomaly=True
+        )
+
+
+@app.get("/sessions")
+async def get_sessions():
+    """Get information about active sessions."""
+    return {
+        "active_sessions": session_manager.get_session_count(),
+        "session_ids": list(session_manager.sessions.keys())
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "server:app",
+        host="0.0.0.0",
+        port=5000,
+        log_level="info"
+    )
