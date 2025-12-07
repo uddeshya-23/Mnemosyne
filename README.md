@@ -21,9 +21,14 @@ Build a security sidecar that:
 
 Project Mnemosyne implements a **Sidecar Proxy Pattern** for LLM security.
 
-> **Note on Implementation vs Vision**: This implementation now features the **Titans MAC Architecture**!
-> *   **Current**: Application-Layer HTTP Proxy (Rust/Axum) + **Titans MAC Brain** (LSTM Controller + MLP Memory).
-> *   **Future Roadmap**: Kernel-level eBPF interception and gRPC communication for zero-latency.
+> **Note on Implementation vs Vision**: This implementation features the **Titans MAC Brain** but uses a User-Space Proxy for Windows compatibility.
+>
+> | Component | Vision (Target) | Implementation (Current) | Status |
+> | :--- | :--- | :--- | :--- |
+> | **Brain Arch** | Titans MAC (LSTM+MLP) | Titans MAC (LSTM+MLP) | ✅ **MATCH** |
+> | **Interception** | Kernel-level (eBPF) | User-space Proxy (Rust) | ⚠️ **Using Proxy** (Windows Limit)|
+> | **Protocol** | gRPC + Shared Memory | HTTP / JSON | ⚠️ **MVP Protocol** |
+> | **Latency** | < 0.1ms (Zero Copy) | ~2ms (Network Loopback) | ⚡ **Fast Enough** |
 
 ### Current Implementation Flow
 

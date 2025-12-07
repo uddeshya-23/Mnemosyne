@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "ebpf_program",
+    "user_loader"
+]
+
+[workspace.dependencies]
+aya = "0.13"
+aya-ebpf = "0.1.0"
+aya-log = "0.2"
+aya-log-ebpf = "0.1.0"
+log = "0.4"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+env_logger = "0.10"
+clap = { version = "4.0", features = ["derive"] }
