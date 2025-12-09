@@ -7,43 +7,36 @@ This directory contains a **Proof-of-Concept Kernel-Space Firewall** using Rust 
 *   **Docker**: Easiest way to build and run (handles toolchains).
 *   **Privileges**: eBPF requires `sudo` or `--privileged`.
 
-## 🚀 How to Run (Docker Method)
+## 🚀 How to Run (Native WSL - Recommended)
 
-This is the recommended way as it installs all dependencies (LLVM, bpf-linker, Nightly Rust) for you.
+Since Docker build can be complex, running natively in WSL is often easier.
 
-1.  **Build the Image**:
+1.  **Install Prerequisites**:
     ```bash
-    cd ebpf_probe
-    docker build -t ebpf-probe .
+    sudo apt update
+    sudo apt install -y llvm clang libclang-dev gcc-multilib build-essential git pkg-config libssl-dev
     ```
 
-2.  **Run with Privileges**:
-    *   We use `--privileged` to allow kernel loading.
-    *   We use `--network host` to see real traffic.
-    *   `RUST_LOG=info` enables the logs.
-    
+2.  **Install bpf-linker**:
     ```bash
-    docker run --privileged --network host -e RUST_LOG=info ebpf-probe
+    cargo install bpf-linker
     ```
 
-3.  **Generate Traffic**:
-    In another terminal, ping or curl locally:
+3.  **Setup Rust Nightly**:
     ```bash
-    curl http://localhost
+    rustup toolchain install nightly
+    rustup target add bpfel-unknown-none --toolchain nightly
+    restup component add rust-src --toolchain nightly
     ```
-    You should see logs in the Docker output:
-    `INFO: Packet received on interface`
 
-## 🛠️ Manual Build (Expert)
-If you want to run natively in WSL:
-1.  Install LLVM: `sudo apt install llvm clang libclang-dev`
-2.  Install Tool: `cargo install bpf-linker`
-3.  Add Target: `rustup target add bpfel-unknown-none --toolchain nightly`
-4.  Build Kernel: 
+4.  **Run the Loader**:
     ```bash
+    # Build kernel (requires nightly)
     cargo +nightly build --package ebpf_program --target bpfel-unknown-none -Z build-std=core
+
+    # Run user loader (needs sudo)
+    sudo -E cargo run --package user_loader -- --iface eth0
     ```
-5.  Run Loader:
-    ```bash
-    RUST_LOG=info cargo run --package user_loader -- --iface eth0
-    ```
+    *(Note: `-E` preserves env vars if needed)*
+
+## 🐳 Docker Method (Alternate)

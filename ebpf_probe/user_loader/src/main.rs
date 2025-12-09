@@ -2,9 +2,9 @@ use anyhow::Context;
 use aya::{
     include_bytes_aligned,
     programs::{Xdp, XdpFlags},
-    Bpf,
+    Ebpf,
 };
-use aya_log::BpfLogger;
+use aya_log::EbpfLogger;
 use clap::Parser;
 use log::{info, warn};
 use tokio::signal;
@@ -33,12 +33,12 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     // Load eBPF bytecode
-    let mut bpf = Bpf::load(include_bytes_aligned!(
+    let mut bpf = Ebpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/debug/ebpf_program"
     ))?;
     
     // Init Logger
-    if let Err(e) = BpfLogger::init(&mut bpf) {
+    if let Err(e) = EbpfLogger::init(&mut bpf) {
         warn!("failed to initialize eBPF logger: {}", e);
     }
     

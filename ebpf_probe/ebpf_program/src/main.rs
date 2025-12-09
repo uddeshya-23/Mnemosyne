@@ -6,19 +6,14 @@ use aya_ebpf::{
     macros::xdp,
     programs::XdpContext,
 };
-use aya_log_ebpf::info;
 
+/// Simple XDP Firewall - Just passes all packets for now
+/// In production, this would inspect packets and make filtering decisions
 #[xdp]
-pub fn xdp_firewall(ctx: XdpContext) -> u32 {
-    match try_xdp_firewall(ctx) {
-        Ok(ret) => ret,
-        Err(_) => xdp_action::XDP_ABORTED,
-    }
-}
-
-fn try_xdp_firewall(ctx: XdpContext) -> Result<u32, u32> {
-    info!(&ctx, "Packet received on interface");
-    Ok(xdp_action::XDP_PASS)
+pub fn xdp_firewall(_ctx: XdpContext) -> u32 {
+    // For MVP: Just pass all packets through
+    // The fact that this runs proves we have kernel-level access!
+    xdp_action::XDP_PASS
 }
 
 #[panic_handler]

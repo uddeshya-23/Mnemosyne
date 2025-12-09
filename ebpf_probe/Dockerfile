@@ -1,17 +1,41 @@
-FROM rust:1.75-bookworm as builder
+FROM rust:1.76-bookworm as builder
 
-# Install LLVM/Clang (Required for bpf-linker)
+# Install Dependencies for adding LLVM repo
 RUN apt-get update && apt-get install -y \
-    llvm \
-    clang \
-    libclang-dev \
-    gcc-multilib \
+    wget \
+    lsb-release \
+    software-properties-common \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install bpf-linker
-RUN cargo install bpf-linker
+# Install LLVM 16 (Required for modern bpf-linker)
+RUN wget https://apt.llvm.org/llvm.sh && \
+    chmod +x llvm.sh && \
+    ./llvm.sh 16 && \
+    rm llvm.sh
 
-# Setup Nightly for eBPF (Required for build-std)
+# Install Dependencies for bpf-linker
+# Note: linking against llvm-16
+RUN apt-get update && apt-get install -y \
+    libllvm16 \
+    llvm-16 \
+    llvm-16-dev \
+    clang-16 \
+    libclang-16-dev \
+    libpolly-16-dev \
+    pkg-config \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix path and force environment for linkage
+ENV LLVM_SYS_160_PREFIX=/usr/lib/llvm-16
+ENV LD_LIBRARY_PATH=/usr/lib/llvm-16/lib
+
+# Install bpf-linker
+RUN cargo install bpf-linker --locked --no-default-features --features system-llvm
+
+# Setup Nightly for eBPF
 RUN rustup toolchain install nightly
 RUN rustup component add rust-src --toolchain nightly
 RUN rustup target add bpfel-unknown-none --toolchain nightly
@@ -19,24 +43,15 @@ RUN rustup target add bpfel-unknown-none --toolchain nightly
 WORKDIR /app
 COPY . .
 
-# Build Kernel Program (needs nightly + bpf target)
-# Correct path for artifact: target/bpfel-unknown-none/debug/ebpf_program
+# Build Kernel Program
 RUN cargo +nightly build --package ebpf_program --target bpfel-unknown-none -Z build-std=core
 
 # Build User Loader
 RUN cargo build --release --package user_loader
 
-# Final Runtime Image (Small, but needs glibc, so using debian:bookworm-slim)
+# Final Runtime Image
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates iproute2 && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 COPY --from=builder /app/target/release/user_loader ./user_loader
-# Copy the compiled BPF ELF to the expected location relative to binary
-# Loader expects: ../../target/bpfel-unknown-none/debug/ebpf_program
-# We might need to adjust loader path or copy file to match structure.
-# But `include_bytes!` embeds it into the binary at BUILD time! 
-# So we DON'T need to copy the BPF file to runtime image.
-# The binary `user_loader` is self-contained.
-
 CMD ["./user_loader", "--iface", "eth0"]
