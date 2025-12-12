@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
+use tower_http::cors::{CorsLayer, Any};
 use tracing::{error, info, warn};
 
 // ============================================================================
@@ -296,10 +297,16 @@ async fn main() {
         http_client: reqwest::Client::new(),
     });
 
-    // Build router
+    // Build router with CORS support for dashboard
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+    
     let app = Router::new()
         .route("/chat/completions", post(chat_completions_handler))
         .route("/health", axum::routing::get(health_check))
+        .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

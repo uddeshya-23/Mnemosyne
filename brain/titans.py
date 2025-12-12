@@ -127,7 +127,7 @@ class SecurityAgent:
         loss.backward()
         self.optimizer.step()
     
-    def is_anomalous(self, surprise_score: float, threshold: float = 4.5) -> bool:
+    def is_anomalous(self, surprise_score: float, threshold: float = 4.2) -> bool:
         """
         Determine if a surprise score indicates an anomaly.
         

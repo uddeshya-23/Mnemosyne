@@ -4,6 +4,7 @@ Exposes endpoints for analyzing text inputs and detecting anomalies.
 """
 
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict
 import logging
@@ -21,6 +22,15 @@ app = FastAPI(
     title="Mnemosyne Brain",
     description="Titans-based security analysis engine for LLM traffic",
     version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for demo purposes
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Global session manager
@@ -69,7 +79,10 @@ async def analyze_text(request: AnalysisRequest, background_tasks: BackgroundTas
     """
     try:
         # Get or create agent for this session
-        agent = session_manager.get_or_create_agent(request.session_id)
+        # FORCE GLOBAL SESSION for demo purposes to allow shared learning and persistence
+        # irrespective of what the proxy sends (which is hash-based and unique per query).
+        effective_session_id = "global_demo_session"
+        agent = session_manager.get_or_create_agent(effective_session_id)
         
         # Calculate surprise score
         surprise_score = agent.calculate_surprise(request.text)
